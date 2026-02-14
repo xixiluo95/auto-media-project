@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-即梦自拍图片生成器 - 主入口
+虚拟实体 - 主入口
 """
 import sys
 import os

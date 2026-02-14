@@ -25,7 +25,7 @@ class SelfieAppCLI:
     def run_interactive(self):
         """运行交互式界面"""
         print("=" * 60)
-        print("  即梦自拍图片生成器 v1.0")
+        print("  虚拟实体 v1.0")
         print("  基于 Seedream 4.0 API")
         print("=" * 60)
         print()
@@ -240,7 +240,7 @@ class SelfieAppCLI:
 def main():
     """CLI 入口"""
     parser = argparse.ArgumentParser(
-        description="即梦自拍图片生成器",
+        description="虚拟实体",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:

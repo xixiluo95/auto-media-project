@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jimeng-selfie"
 version = "1.0.0"
-description = "即梦自拍图片生成器 - 基于火山引擎 Seedream 4.0 API"
+description = "虚拟实体 - 基于火山引擎 Seedream 4.0 API"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
