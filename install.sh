@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# 虚拟实体 (Virtual Entity) - 一键安装脚本
+# 虚拟实体 (Virtual Entity) - OpenClaw 集成安装脚本
 # 支持: Linux, macOS
 #
 # 使用方法:
@@ -19,11 +19,12 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 配置
-APP_NAME="jimeng-selfie"
-CONFIG_DIR="$HOME/.jimeng-selfie"
+SKILL_NAME="virtual-entity"
+OPENCLAW_DIR="$HOME/.openclaw"
+AGENTS_SKILLS_DIR="$HOME/.agents/skills"
+SKILL_DIR="$AGENTS_SKILLS_DIR/$SKILL_NAME"
+CONFIG_DIR="$HOME/.$SKILL_NAME"
 CONFIG_FILE="$CONFIG_DIR/config.env"
-INSTALL_DIR="$HOME/.local/share/jimeng-selfie"
-BIN_DIR="$HOME/.local/bin"
 
 # 打印函数
 info() {
@@ -59,7 +60,6 @@ detect_os() {
 check_python() {
     info "检查 Python 版本..."
 
-    # 优先检查 python3
     if command -v python3 &> /dev/null; then
         PYTHON_CMD="python3"
     elif command -v python &> /dev/null; then
@@ -68,7 +68,6 @@ check_python() {
         error "未找到 Python，请先安装 Python 3.8 或更高版本"
     fi
 
-    # 检查版本
     PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
     PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
     PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
@@ -97,15 +96,91 @@ check_pip() {
     success "pip 已就绪"
 }
 
+# 检查 OpenClaw
+check_openclaw() {
+    info "检查 OpenClaw 环境..."
+
+    if [ ! -d "$OPENCLAW_DIR" ]; then
+        warn "未检测到 OpenClaw 目录 (~/.openclaw)"
+        info "将创建必要的目录结构..."
+        mkdir -p "$OPENCLAW_DIR"
+    fi
+
+    # 创建 .agents/skills 目录
+    mkdir -p "$AGENTS_SKILLS_DIR"
+    mkdir -p "$OPENCLAW_DIR/skills"
+
+    success "OpenClaw 目录结构已准备"
+}
+
 # 创建配置目录
 create_config_dir() {
     info "创建配置目录..."
 
     mkdir -p "$CONFIG_DIR"
-    mkdir -p "$INSTALL_DIR"
-    mkdir -p "$BIN_DIR"
+    mkdir -p "$CONFIG_DIR/output"
+    mkdir -p "$CONFIG_DIR/reference_images"
 
-    success "配置目录已创建"
+    success "配置目录已创建: $CONFIG_DIR"
+}
+
+# 安装 Skill 到 OpenClaw
+install_skill() {
+    info "安装 Skill 到 OpenClaw..."
+
+    # 获取脚本所在目录
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # 创建 Skill 目录
+    mkdir -p "$SKILL_DIR"
+    mkdir -p "$SKILL_DIR/scripts"
+
+    # 复制 SKILL.md
+    if [ -f "$SCRIPT_DIR/skills/virtual-entity/SKILL.md" ]; then
+        cp "$SCRIPT_DIR/skills/virtual-entity/SKILL.md" "$SKILL_DIR/"
+        success "已复制 SKILL.md"
+    else
+        warn "未找到 SKILL.md，跳过"
+    fi
+
+    # 复制 jimeng-selfie-app 到 scripts
+    if [ -d "$SCRIPT_DIR/jimeng-selfie-app" ]; then
+        cp -r "$SCRIPT_DIR/jimeng-selfie-app/app" "$SKILL_DIR/scripts/"
+        cp "$SCRIPT_DIR/jimeng-selfie-app/main.py" "$SKILL_DIR/scripts/generate.py" 2>/dev/null || true
+        success "已复制应用脚本"
+    fi
+
+    # 复制 social-media-automation skill
+    if [ -d "$SCRIPT_DIR/skills/social-media-automation" ]; then
+        cp -r "$SCRIPT_DIR/skills/social-media-automation" "$SKILL_DIR/"
+        success "已复制社交媒体自动化模块"
+    fi
+
+    # 创建符号链接到 OpenClaw skills 目录
+    if [ ! -L "$OPENCLAW_DIR/skills/$SKILL_NAME" ]; then
+        ln -sf "$SKILL_DIR" "$OPENCLAW_DIR/skills/$SKILL_NAME"
+        success "已创建符号链接: $OPENCLAW_DIR/skills/$SKILL_NAME"
+    fi
+
+    success "Skill 安装完成: $SKILL_DIR"
+}
+
+# 安装依赖
+install_dependencies() {
+    info "安装 Python 依赖..."
+
+    # 获取脚本所在目录
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REQUIREMENTS_FILE="$SCRIPT_DIR/jimeng-selfie-app/requirements.txt"
+
+    if [ -f "$REQUIREMENTS_FILE" ]; then
+        $PIP_CMD install -r "$REQUIREMENTS_FILE" --user --break-system-packages 2>/dev/null || \
+        $PIP_CMD install -r "$REQUIREMENTS_FILE" --break-system-packages
+    else
+        $PIP_CMD install requests pillow --break-system-packages
+    fi
+
+    success "依赖安装完成"
 }
 
 # 配置 API Key
@@ -114,7 +189,6 @@ configure_api_key() {
 
     # 检查是否已存在配置
     if [ -f "$CONFIG_FILE" ]; then
-        # 读取现有配置
         source "$CONFIG_FILE" 2>/dev/null || true
         if [ -n "$ARK_API_KEY" ]; then
             warn "检测到已有 API Key 配置"
@@ -141,37 +215,37 @@ configure_api_key() {
     read -p "ARK API Key: " API_KEY_INPUT
 
     if [ -n "$API_KEY_INPUT" ]; then
-        # 创建配置文件
         cat > "$CONFIG_FILE" << EOF
 # 虚拟实体配置文件
 # 生成时间: $(date)
 
-# 火山引擎 ARK API Key
+# 火山引擎 ARK API Key（即梦 API）
 ARK_API_KEY="${API_KEY_INPUT}"
 
-# API 端点 (通常不需要修改)
+# fal.ai API Key（Grok API，可选）
+FAL_API_KEY=""
+
+# API 端点
 ARK_API_URL=https://ark.cn-beijing.volces.com/api/v3/images/generations
 
 # 模型名称
 MODEL_NAME=doubao-seedream-4-0-250828
 
-# 默认输出目录
-OUTPUT_DIR=${INSTALL_DIR}/output
-
-# 参考图目录
-REFERENCE_DIR=${INSTALL_DIR}/reference_images
+# 输出目录
+OUTPUT_DIR=${CONFIG_DIR}/output
 EOF
         chmod 600 "$CONFIG_FILE"
         success "API Key 已保存到 $CONFIG_FILE"
     else
-        warn "跳过 API Key 配置"
-        # 创建模板配置文件
         cat > "$CONFIG_FILE" << EOF
 # 虚拟实体配置文件
-# 请将您的 API Key 填入下方
+# 请填入您的 API Key
 
-# 火山引擎 ARK API Key (必填)
+# 火山引擎 ARK API Key（必填）
 ARK_API_KEY=""
+
+# fal.ai API Key（可选）
+FAL_API_KEY=""
 
 # API 端点
 ARK_API_URL=https://ark.cn-beijing.volces.com/api/v3/images/generations
@@ -180,92 +254,8 @@ ARK_API_URL=https://ark.cn-beijing.volces.com/api/v3/images/generations
 MODEL_NAME=doubao-seedream-4-0-250828
 EOF
         chmod 600 "$CONFIG_FILE"
-        info "配置模板已创建，请稍后编辑 $CONFIG_FILE 填入 API Key"
+        warn "跳过 API Key 配置，请稍后编辑 $CONFIG_FILE"
     fi
-}
-
-# 安装依赖
-install_dependencies() {
-    info "安装 Python 依赖..."
-
-    # 获取脚本所在目录
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    APP_DIR="$SCRIPT_DIR/jimeng-selfie-app"
-    REQUIREMENTS_FILE="$APP_DIR/requirements.txt"
-
-    if [ -f "$REQUIREMENTS_FILE" ]; then
-        $PIP_CMD install -r "$REQUIREMENTS_FILE" --user --break-system-packages
-    else
-        # 如果没有 requirements.txt，安装核心依赖
-        $PIP_CMD install requests pillow --user --break-system-packages
-    fi
-
-    success "依赖安装完成"
-}
-
-# 创建命令行工具
-create_cli_tool() {
-    info "创建命令行工具..."
-
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    APP_DIR="$SCRIPT_DIR/jimeng-selfie-app"
-
-    # 创建启动脚本
-    cat > "$BIN_DIR/jimeng-selfie" << EOF
-#!/bin/bash
-# 虚拟实体启动脚本
-
-# 加载配置文件
-if [ -f "$CONFIG_FILE" ]; then
-    export \$(grep -v '^#' "$CONFIG_FILE" | xargs)
-fi
-
-# 设置应用路径
-APP_DIR="$APP_DIR"
-
-# 运行应用
-cd "\$APP_DIR" && $PYTHON_CMD main.py "\$@"
-EOF
-
-    chmod +x "$BIN_DIR/jimeng-selfie"
-
-    success "命令行工具已创建: $BIN_DIR/jimeng-selfie"
-}
-
-# 配置 PATH
-configure_path() {
-    info "配置 PATH 环境变量..."
-
-    # 检查 PATH 是否已包含
-    if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-        # 检测 shell 配置文件
-        if [ -f "$HOME/.bashrc" ]; then
-            SHELL_RC="$HOME/.bashrc"
-        elif [ -f "$HOME/.zshrc" ]; then
-            SHELL_RC="$HOME/.zshrc"
-        else
-            SHELL_RC="$HOME/.profile"
-        fi
-
-        # 添加到配置文件
-        echo "" >> "$SHELL_RC"
-        echo "# 虚拟实体" >> "$SHELL_RC"
-        echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$SHELL_RC"
-
-        info "已将 $BIN_DIR 添加到 $SHELL_RC"
-        warn "请运行 'source $SHELL_RC' 或重新打开终端以生效"
-    fi
-}
-
-# 创建必要的目录
-create_directories() {
-    info "创建应用目录..."
-
-    mkdir -p "$INSTALL_DIR/output"
-    mkdir -p "$INSTALL_DIR/reference_images"
-    mkdir -p "$INSTALL_DIR/logs"
-
-    success "应用目录已创建"
 }
 
 # 显示安装完成信息
@@ -275,35 +265,34 @@ show_complete() {
     echo -e "${GREEN}  安装完成!${NC}"
     echo "=========================================="
     echo ""
+    echo -e "${YELLOW}已安装到 OpenClaw Skills:${NC}"
+    echo "  $SKILL_DIR"
+    echo "  $OPENCLAW_DIR/skills/$SKILL_NAME (符号链接)"
+    echo ""
     echo -e "${YELLOW}三种图片生成方式:${NC}"
     echo ""
     echo -e "${BLUE}方式一: 即梦 API (推荐)${NC}"
     echo "  1. 获取 API Key: https://console.volcengine.com/ark"
     echo "  2. 配置: vi $CONFIG_FILE"
-    echo "  3. 使用: $BIN_DIR/jimeng-selfie --prompt \"描述\" --selfie"
+    echo "  3. OpenClaw 会自动识别触发词"
     echo ""
     echo -e "${BLUE}方式二: Grok API (Clawra 兼容)${NC}"
     echo "  1. 获取 API Key: https://fal.ai/dashboard/keys"
     echo "  2. 配置: export FAL_API_KEY=\"your-key\""
-    echo "  3. 参考: https://github.com/SumeLabs/clawra"
     echo ""
     echo -e "${BLUE}方式三: 即梦网页版 (免费)${NC}"
     echo "  1. 启动 Chrome: google-chrome --remote-debugging-port=9222"
     echo "  2. 登录: https://jimeng.jianying.com/"
-    echo "  3. 查看: skills/social-media-automation/SKILL.md"
     echo ""
     echo "=========================================="
     echo ""
-    echo "常用命令:"
-    echo "  jimeng-selfie                    # 交互式界面"
-    echo "  jimeng-selfie --list-styles      # 查看风格列表"
-    echo "  jimeng-selfie --help             # 查看帮助"
+    echo "触发词（对 OpenClaw 说）:"
+    echo "  \"发张自拍\""
+    echo "  \"生成一张咖啡厅的照片\""
+    echo "  \"发到推特\""
     echo ""
     echo "配置文件: $CONFIG_FILE"
-    echo "输出目录: $INSTALL_DIR/output"
-    echo ""
-    echo -e "${YELLOW}提示:${NC} 如果命令未找到，请运行:"
-    echo "  source ~/.bashrc  # 或 source ~/.zshrc"
+    echo "Skill 目录: $SKILL_DIR"
     echo ""
 }
 
@@ -312,7 +301,7 @@ main() {
     echo ""
     echo "=========================================="
     echo "  虚拟实体 (Virtual Entity) v1.0"
-    echo "  一键安装脚本"
+    echo "  OpenClaw 集成安装"
     echo "=========================================="
     echo ""
 
@@ -320,18 +309,17 @@ main() {
     detect_os
     check_python
     check_pip
+    check_openclaw
 
     # 创建目录
     create_config_dir
-    create_directories
 
     # 安装
     install_dependencies
-    create_cli_tool
+    install_skill
 
     # 配置
     configure_api_key
-    configure_path
 
     # 完成
     show_complete
