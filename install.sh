@@ -1,10 +1,10 @@
 #!/bin/bash
 #
-# 即梦自拍图片生成器 - 一键安装脚本
+# 虚拟实体 (Virtual Entity) - 一键安装脚本
 # 支持: Linux, macOS
 #
 # 使用方法:
-#   curl -fsSL https://example.com/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/xixiluo95/virtual-entity/main/install.sh | bash
 #   或
 #   ./install.sh
 #
@@ -143,7 +143,7 @@ configure_api_key() {
     if [ -n "$API_KEY_INPUT" ]; then
         # 创建配置文件
         cat > "$CONFIG_FILE" << EOF
-# 即梦自拍图片生成器配置文件
+# 虚拟实体配置文件
 # 生成时间: $(date)
 
 # 火山引擎 ARK API Key
@@ -167,7 +167,7 @@ EOF
         warn "跳过 API Key 配置"
         # 创建模板配置文件
         cat > "$CONFIG_FILE" << EOF
-# 即梦自拍图片生成器配置文件
+# 虚拟实体配置文件
 # 请将您的 API Key 填入下方
 
 # 火山引擎 ARK API Key (必填)
@@ -194,10 +194,10 @@ install_dependencies() {
     REQUIREMENTS_FILE="$APP_DIR/requirements.txt"
 
     if [ -f "$REQUIREMENTS_FILE" ]; then
-        $PIP_CMD install -r "$REQUIREMENTS_FILE" --user
+        $PIP_CMD install -r "$REQUIREMENTS_FILE" --user --break-system-packages
     else
         # 如果没有 requirements.txt，安装核心依赖
-        $PIP_CMD install requests pillow --user
+        $PIP_CMD install requests pillow --user --break-system-packages
     fi
 
     success "依赖安装完成"
@@ -213,7 +213,7 @@ create_cli_tool() {
     # 创建启动脚本
     cat > "$BIN_DIR/jimeng-selfie" << EOF
 #!/bin/bash
-# 即梦自拍图片生成器启动脚本
+# 虚拟实体启动脚本
 
 # 加载配置文件
 if [ -f "$CONFIG_FILE" ]; then
@@ -249,7 +249,7 @@ configure_path() {
 
         # 添加到配置文件
         echo "" >> "$SHELL_RC"
-        echo "# 即梦自拍图片生成器" >> "$SHELL_RC"
+        echo "# 虚拟实体" >> "$SHELL_RC"
         echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$SHELL_RC"
 
         info "已将 $BIN_DIR 添加到 $SHELL_RC"
@@ -301,7 +301,7 @@ show_complete() {
 main() {
     echo ""
     echo "=========================================="
-    echo "  即梦自拍图片生成器 v1.0"
+    echo "  虚拟实体 (Virtual Entity) v1.0"
     echo "  一键安装脚本"
     echo "=========================================="
     echo ""
