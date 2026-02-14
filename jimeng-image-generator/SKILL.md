@@ -98,16 +98,16 @@ image_path = generate_image(theme="人物", use_reference=True)
 
 ```bash
 # 随机主题创作
-python3 /home/xixil/.openclaw/workspace/jimeng_creative.py
+python3 ~/.openclaw/workspace/jimeng_creative.py
 
 # 指定主题
-python3 /home/xixil/.openclaw/workspace/jimeng_creative.py --theme 风景
+python3 ~/.openclaw/workspace/jimeng_creative.py --theme 风景
 
 # 使用参考图
-python3 /home/xixil/.openclaw/workspace/jimeng_creative.py --reference
+python3 ~/.openclaw/workspace/jimeng_creative.py --reference
 
 # 组合使用
-python3 /home/xixil/.openclaw/workspace/jimeng_creative.py -t 奇幻 -r
+python3 ~/.openclaw/workspace/jimeng_creative.py -t 奇幻 -r
 ```
 
 ## 创意主题
@@ -122,9 +122,9 @@ python3 /home/xixil/.openclaw/workspace/jimeng_creative.py -t 奇幻 -r
 
 ## 输出位置
 
-- 图片保存目录：`/home/xixil/图片/`
-- 截图保存目录：`/home/xixil/.openclaw/workspace/screenshots/`
-- Cookie保存位置：`/home/xixil/.openclaw/credentials/jimeng_cookies.json`
+- 图片保存目录：`~/图片/`
+- 截图保存目录：`~/.openclaw/workspace/screenshots/`
+- Cookie保存位置：`~/.openclaw/credentials/jimeng_cookies.json`
 
 ## 工作流程（2026-02-13更新）
 
@@ -255,7 +255,7 @@ def wait_for_generation(driver, max_wait=60):
 ### 下载高清图片
 
 ```python
-def download_hd_images(driver, save_dir="/home/xixil/图片", count=4):
+def download_hd_images(driver, save_dir="~/图片", count=4):
     """
     下载高清图片（非缩略图）
 
@@ -329,7 +329,7 @@ BANNER_PROMPT = """梦幻日落天空，渐变色彩从橙色到紫色，柔和�
 {
   "name": "jimeng-image-generator",
   "description": "AI图片自动创作，支持多种主题和参考图",
-  "command": "python3 /home/xixil/.openclaw/workspace/jimeng_creative.py"
+  "command": "python3 ~/.openclaw/workspace/jimeng_creative.py"
 }
 ```
 
@@ -340,13 +340,13 @@ BANNER_PROMPT = """梦幻日落天空，渐变色彩从橙色到紫色，柔和�
 OpenClaw：好的，我来为您创作一张风景图。
 [调用jimeng-image-generator skill]
 创意提示词：壮丽的雪山日出，金色阳光洒在雪峰上，云海翻涌，电影级光效
-图片已生成并保存：/home/xixil/图片/即梦_风景_20260211_234500.png
+图片已生成并保存：~/图片/即梦_风景_20260211_234500.png
 
 用户：用这张图作为参考，创作一张奇幻主题的图
 OpenClaw：好的，我将使用刚才生成的图片作为参考，创作奇幻主题。
 [调用jimeng-image-generator skill with reference]
 创意提示词：浮空岛屿上的魔法城堡，瀑布倾泻，飞龙盘旋，梦幻朦胧
-图片已生成并保存：/home/xixil/图片/即梦_奇幻_20260211_234600.png
+图片已生成并保存：~/图片/即梦_奇幻_20260211_234600.png
 ```
 
 ---
@@ -360,7 +360,7 @@ OpenClaw：好的，我将使用刚才生成的图片作为参考，创作奇幻
 ### 角色档案位置
 
 ```
-/home/xixil/图片/角色档案_西娅.md
+~/图片/角色档案_西娅.md
 ```
 
 ### 使用方法
@@ -380,7 +380,7 @@ image_path = generate_character_scene(
     character="西娅",
     scene="street_walking",
     use_reference=True,
-    reference_path="/home/xixil/图片/西娅_基准图.png"
+    reference_path="~/图片/西娅_基准图.png"
 )
 
 # 生成三视图
@@ -1224,7 +1224,7 @@ def generate_character_prompt(character_name: str, scene_type: str) -> str:
 
 ```
 1. 首先使用"office"场景生成一张满意的"定妆照"
-2. 将满意的照片保存为角色基准图：/home/xixil/图片/西娅_基准图.png
+2. 将满意的照片保存为角色基准图：~/图片/西娅_基准图.png
 3. 每次生成新场景时，上传基准图作为参考图
 4. 即梦会保持角色的核心外貌特征
 ```
