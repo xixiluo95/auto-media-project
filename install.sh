@@ -1,7 +1,6 @@
 #!/bin/bash
 #
 # 虚拟实体 (Virtual Entity) - OpenClaw 集成安装脚本
-# 支持: Linux, macOS
 #
 
 # 颜色定义
@@ -41,8 +40,6 @@ check_python() {
     info "检查 Python 版本..."
     if command -v python3 &> /dev/null; then
         PYTHON_CMD="python3"
-    elif command -v python &> /dev/null; then
-        PYTHON_CMD="python"
     else
         error "未找到 Python，请先安装 Python 3.8+"
     fi
@@ -55,8 +52,6 @@ check_pip() {
     info "检查 pip..."
     if $PYTHON_CMD -m pip --version &> /dev/null; then
         PIP_CMD="$PYTHON_CMD -m pip"
-    elif command -v pip3 &> /dev/null; then
-        PIP_CMD="pip3"
     else
         error "未找到 pip"
     fi
@@ -66,10 +61,7 @@ check_pip() {
 # 检查 OpenClaw
 check_openclaw() {
     info "检查 OpenClaw 环境..."
-    if [ ! -d "$OPENCLAW_DIR" ]; then
-        warn "未检测到 OpenClaw，将创建目录"
-        mkdir -p "$OPENCLAW_DIR"
-    fi
+    mkdir -p "$OPENCLAW_DIR"
     mkdir -p "$AGENTS_SKILLS_DIR"
     mkdir -p "$OPENCLAW_DIR/skills"
     mkdir -p "$CREDENTIALS_DIR"
@@ -97,317 +89,308 @@ install_skill() {
     [ -d "$SCRIPT_DIR/skills/social-media-automation" ] && cp -r "$SCRIPT_DIR/skills/social-media-automation" "$SKILL_DIR/"
     [ ! -e "$OPENCLAW_DIR/skills/$SKILL_NAME" ] && ln -sf "$SKILL_DIR" "$OPENCLAW_DIR/skills/$SKILL_NAME"
 
-    success "Skill 安装完成: $SKILL_DIR"
+    success "Skill 安装完成"
 }
 
-# 安装依赖
+# 安装依赖（包括 playwright）
 install_dependencies() {
     info "安装 Python 依赖..."
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     REQUIREMENTS_FILE="$SCRIPT_DIR/jimeng-selfie-app/requirements.txt"
-    if [ -f "$REQUIREMENTS_FILE" ]; then
-        $PIP_CMD install -r "$REQUIREMENTS_FILE" --break-system-packages 2>/dev/null || \
-        $PIP_CMD install -r "$REQUIREMENTS_FILE" --user --break-system-packages
-    else
-        $PIP_CMD install requests pillow --break-system-packages
-    fi
+
+    # 安装基础依赖
+    $PIP_CMD install requests pillow playwright --break-system-packages
+
+    # 安装 playwright 浏览器（用于自动保存 Cookie）
+    python3 -m playwright install chromium 2>/dev/null || true
+
     success "依赖安装完成"
 }
 
-# 配置 API Key
-configure_api_key() {
+# API 配置
+configure_api() {
     echo ""
     echo "=========================================="
-    echo "  API 配置（可选）"
+    echo "  API 配置"
     echo "=========================================="
-    echo ""
-    echo -e "${YELLOW}提示：即使没有 API Key，也可以使用即梦网页版（免费）${NC}"
-    echo "         启动方式: google-chrome --remote-debugging-port=9222"
     echo ""
 
+    # 即梦 API
     echo -e "${BLUE}[1/2] 即梦 API (火山方舟)${NC}"
-    echo "    获取地址: https://console.volcengine.com/ark"
+    echo "    获取: https://console.volcengine.com/ark"
     echo "    价格: ¥0.25-0.32/张"
-    read -p "    请输入即梦 API Key (按 Enter 跳过): " JIMENG_KEY
+    read -p "    是否使用即梦 API? [y/N] " -n 1 -r
+    echo
+    USE_JIMENG_API=false
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        USE_JIMENG_API=true
+        read -p "    请输入即梦 API Key: " JIMENG_KEY
+    fi
 
+    # Grok API
     echo ""
     echo -e "${BLUE}[2/2] Grok API (fal.ai)${NC}"
-    echo "    获取地址: https://fal.ai/dashboard/keys"
+    echo "    获取: https://fal.ai/dashboard/keys"
     echo "    价格: \$0.035/张"
-    read -p "    请输入 Grok API Key (按 Enter 跳过): " GROK_KEY
+    read -p "    是否使用 Grok API? [y/N] " -n 1 -r
+    echo
+    USE_GROK_API=false
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        USE_GROK_API=true
+        read -p "    请输入 Grok API Key: " GROK_KEY
+    fi
 
-    JIMENG_KEY="${JIMENG_KEY:-}"
-    GROK_KEY="${GROK_KEY:-}"
-
+    # 保存配置
     cat > "$CONFIG_FILE" << EOF
 # 虚拟实体配置文件
 # 生成时间: $(date)
 
-# ============ API 配置 ============
+# 即梦 API
+ARK_API_KEY="${JIMENG_KEY:-}"
 
-# 即梦 API Key (火山方舟)
-ARK_API_KEY="${JIMENG_KEY}"
+# Grok API
+FAL_API_KEY="${GROK_KEY:-}"
 
-# Grok API Key (fal.ai)
-FAL_API_KEY="${GROK_KEY}"
-
-# ============ API 端点 ============
-
+# API 端点
 ARK_API_URL=https://ark.cn-beijing.volces.com/api/v3/images/generations
 MODEL_NAME=doubao-seedream-4-0-250828
 
-# ============ 输出目录 ============
-
+# 输出目录
 OUTPUT_DIR=${CONFIG_DIR}/output
 
-# ============ 社交媒体配置 ============
-
+# 社交媒体
+JIMENG_WEB_ENABLED=false
 TWITTER_ENABLED=false
 XIAOHONGSHU_ENABLED=false
 
-# ============ 自动发布设置 ============
-
+# 自动发布
 AUTO_POST_ENABLED=true
 AUTO_POST_INTERVAL_HOURS=6
 EOF
     chmod 600 "$CONFIG_FILE"
 
     echo ""
-    if [ -n "$JIMENG_KEY" ] || [ -n "$GROK_KEY" ]; then
-        success "API 配置已保存"
+    success "API 配置完成"
+}
+
+# 统一 CDP 登录配置
+setup_cdp_logins() {
+    echo ""
+    echo "=========================================="
+    echo "  网页登录配置"
+    echo "=========================================="
+    echo ""
+
+    # 判断是否需要使用网页版
+    NEED_WEB_LOGIN=false
+    if [ "$USE_JIMENG_API" = false ] && [ "$USE_GROK_API" = false ]; then
+        echo -e "${YELLOW}你未配置任何 API，需要使用即梦网页版生成图片${NC}"
+        NEED_WEB_LOGIN=true
+    fi
+
+    echo "是否需要记录以下网站的登录状态？"
+    echo ""
+
+    # 即梦网页版
+    USE_JIMENG_WEB=false
+    if [ "$USE_JIMENG_API" = false ]; then
+        read -p "  记录即梦网页版登录? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            USE_JIMENG_WEB=true
+            NEED_WEB_LOGIN=true
+        fi
+    fi
+
+    # Twitter
+    read -p "  记录 Twitter/X 登录? [y/N] " -n 1 -r
+    echo
+    USE_TWITTER=false
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        USE_TWITTER=true
+        NEED_WEB_LOGIN=true
+    fi
+
+    # 小红书
+    read -p "  记录小红书登录? [y/N] " -n 1 -r
+    echo
+    USE_XIAOHONGSHU=false
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        USE_XIAOHONGSHU=true
+        NEED_WEB_LOGIN=true
+    fi
+
+    # 如果需要登录，执行统一登录流程
+    if [ "$NEED_WEB_LOGIN" = true ]; then
+        do_cdp_login
     else
-        warn "未配置 API Key，将使用即梦网页版"
+        info "跳过网页登录配置"
     fi
+
+    # 更新配置文件
+    sed -i "s/JIMENG_WEB_ENABLED=false/JIMENG_WEB_ENABLED=$USE_JIMENG_WEB/" "$CONFIG_FILE" 2>/dev/null || true
+    sed -i "s/TWITTER_ENABLED=false/TWITTER_ENABLED=$USE_TWITTER/" "$CONFIG_FILE" 2>/dev/null || true
+    sed -i "s/XIAOHONGSHU_ENABLED=false/XIAOHONGSHU_ENABLED=$USE_XIAOHONGSHU/" "$CONFIG_FILE" 2>/dev/null || true
 }
 
-# 注入角色设定
-inject_persona() {
-    info "自动注入角色设定到现有 workspace..."
-
-    declare -A WS_NAMES
-    WS_NAMES["workspace-database-administrator"]="数据库管理员"
-    WS_NAMES["workspace-database-administrator-8"]="数据库管理员-8"
-    WS_NAMES["workspace-database-administrator-1"]="数据库管理员-1"
-    WS_NAMES["workspace-diary-sync"]="日记同步"
-    WS_NAMES["workspace-backend-engineer"]="后端工程师"
-    WS_NAMES["workspace-frontend-luoming"]="前端工程师-洛明"
-    WS_NAMES["workspace-secretary-xiaoyue"]="文秘小月"
-    WS_NAMES["workspace-magazine-editor"]="杂志编辑"
-
-    WORKSPACES=$(find "$OPENCLAW_DIR" -maxdepth 1 -type d -name "workspace-*" 2>/dev/null)
-
-    if [ -z "$WORKSPACES" ]; then
-        warn "未检测到 workspace，跳过角色注入"
-        return
-    fi
-
-    injected_count=0
-
-    for ws in $WORKSPACES; do
-        SOUL_FILE="$ws/SOUL.md"
-        ws_name=$(basename "$ws")
-        cn_name="${WS_NAMES[$ws_name]:-$ws_name}"
-
-        if [ ! -f "$SOUL_FILE" ]; then
-            continue
-        fi
-
-        if grep -q "virtual-entity" "$SOUL_FILE" 2>/dev/null; then
-            info "已注入过: $cn_name，跳过"
-            continue
-        fi
-
-        cat >> "$SOUL_FILE" << 'PERSONA_EOF'
-
----
-
-## 自拍能力 (virtual-entity)
-
-我可以根据对话上下文和情绪生成自拍图片，并发布到社交媒体。
-
-### 触发词
-- "发自拍"、"发照片"、"自拍"
-- "想你了"、"好久不见"
-- "心情不好"、"开心"、"难过"、"无聊"
-
-### 情绪感知
-当用户长时间未与我交互时，我会：
-- 6小时后：想念用户，可能发自拍
-- 24小时后：担心用户，发忧郁风格自拍
-- 3天后：发"好久不见"类动态
-
-### 图片风格
-我掌握 28 种拍照风格，会根据当前情绪自动选择：
-- 开心时：比心自拍、举高自拍
-- 想念时：对镜微笑、仰望自拍
-- 难过时：低头自拍、背影自拍
-- 无聊时：托腮自拍、遮脸自拍
-
-### 社交媒体
-我可以将自拍发布到：
-- Twitter/X
-- 小红书
-
-*此能力由 virtual-entity 提供*
-PERSONA_EOF
-
-        success "已注入: $cn_name"
-        injected_count=$((injected_count + 1))
-    done
-
-    if [ $injected_count -gt 0 ]; then
-        echo ""
-        warn "请重新启动 OpenClaw 以生效"
-    fi
-}
-
-# 保存 Cookie 的 Python 脚本
-save_cookies_script() {
-    cat << 'SAVE_COOKIE_EOF'
+# 创建自动保存 Cookie 的脚本
+create_cookie_saver() {
+    cat > /tmp/virtual_entity_save_cookies.py << 'COOKIE_SAVER_EOF'
+#!/usr/bin/env python3
+"""自动保存 Cookie 脚本"""
 import json
 import sys
+import os
+from playwright.sync_api import sync_playwright
 
-def save_cookies(cookies, filepath):
-    with open(filepath, 'w') as f:
-        json.dump(cookies, f, indent=2)
-    print(f"Cookie 已保存到: {filepath}")
+def save_cookies(cdp_url, site_name, output_dir):
+    """连接 CDP 并保存 Cookie"""
+    cookie_file = os.path.join(output_dir, f"{site_name}_cookies.json")
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0]
+            cookies = context.cookies()
+
+            with open(cookie_file, 'w') as f:
+                json.dump(cookies, f, indent=2)
+
+            browser.close()
+            print(f"✅ Cookie 已保存: {cookie_file}")
+            return True
+    except Exception as e:
+        print(f"❌ 保存失败: {e}")
+        return False
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("用法: save_cookies.py <cookie_json> <filepath>")
+        print("用法: save_cookies.py <cdp_url> <site_name> [output_dir]")
         sys.exit(1)
-    cookies = json.loads(sys.argv[1])
-    save_cookies(cookies, sys.argv[2])
-SAVE_COOKIE_EOF
+
+    cdp_url = sys.argv[1]
+    site_name = sys.argv[2]
+    output_dir = sys.argv[3] if len(sys.argv) > 3 else os.path.expanduser("~/.openclaw/credentials")
+
+    os.makedirs(output_dir, exist_ok=True)
+    save_cookies(cdp_url, site_name, output_dir)
+COOKIE_SAVER_EOF
+    chmod +x /tmp/virtual_entity_save_cookies.py
 }
 
-# 引导注册 Twitter
-setup_twitter() {
+# 执行 CDP 登录
+do_cdp_login() {
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  Twitter/X 账号登录引导${NC}"
+    echo -e "${BLUE}  开始网页登录流程${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
-    echo "将启动 Chrome 浏览器，请登录你的 Twitter/X 账号"
-    echo "登录成功后，Cookie 将自动保存"
+
+    # 创建 Cookie 保存脚本
+    create_cookie_saver
+
+    CDP_PORT=9222
+    CHROME_DATA_DIR="/tmp/chrome-virtual-entity"
+
+    # 构建要打开的 URL
+    URLS=""
+    SITES=""
+
+    if [ "$USE_JIMENG_WEB" = true ]; then
+        URLS="$URLS https://jimeng.jianying.com"
+        SITES="$SITES jimeng"
+    fi
+    if [ "$USE_TWITTER" = true ]; then
+        URLS="$URLS https://twitter.com"
+        SITES="$SITES twitter"
+    fi
+    if [ "$USE_XIAOHONGSHU" = true ]; then
+        URLS="$URLS https://www.xiaohongshu.com"
+        SITES="$SITES xiaohongshu"
+    fi
+
+    echo "将启动 Chrome 浏览器，请在浏览器中完成以下登录："
+    echo ""
+    if [ "$USE_JIMENG_WEB" = true ]; then
+        echo "  - 即梦网页版: https://jimeng.jianying.com"
+    fi
+    if [ "$USE_TWITTER" = true ]; then
+        echo "  - Twitter/X: https://twitter.com"
+    fi
+    if [ "$USE_XIAOHONGSHU" = true ]; then
+        echo "  - 小红书: https://www.xiaohongshu.com"
+    fi
+    echo ""
+    echo -e "${YELLOW}登录完成后，Cookie 会自动保存${NC}"
     echo ""
     read -p "按 Enter 启动浏览器..."
 
     # 启动 Chrome
     info "启动 Chrome 浏览器..."
-    google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-virtual-entity-twitter https://twitter.com/login &
+    rm -rf "$CHROME_DATA_DIR"
+    google-chrome --remote-debugging-port=$CDP_PORT --user-data-dir="$CHROME_DATA_DIR" $URLS &
     CHROME_PID=$!
 
     echo ""
-    echo "浏览器已启动，请在浏览器中完成登录"
+    echo "浏览器已启动 (PID: $CHROME_PID)"
     echo ""
-    read -p "登录完成后按 Enter 继续..."
+    echo "请在浏览器中完成所有网站的登录"
+    echo ""
+    read -p "全部登录完成后按 Enter 自动保存 Cookie..."
 
-    # 保存 Cookie 的提示
+    # 自动保存 Cookie
     echo ""
-    success "Twitter 登录完成"
-    echo ""
-    echo "请手动导出 Cookie 并保存到:"
-    echo "  $CREDENTIALS_DIR/twitter_cookies.json"
-    echo ""
-    echo "方法："
-    echo "  1. 在 Chrome 中按 F12 打开开发者工具"
-    echo "  2. 切换到 Application 标签"
-    echo "  3. 左侧选择 Cookies > https://twitter.com"
-    echo "  4. 复制所有 Cookie 到 JSON 文件"
-    echo ""
+    info "正在保存 Cookie..."
 
-    # 创建 Cookie 目录
-    mkdir -p "$CREDENTIALS_DIR"
+    CDP_URL="http://localhost:$CDP_PORT"
 
-    # 更新配置
-    sed -i "s/TWITTER_ENABLED=false/TWITTER_ENABLED=true/" "$CONFIG_FILE" 2>/dev/null || true
-    success "Twitter 配置已启用"
+    for site in $SITES; do
+        python3 /tmp/virtual_entity_save_cookies.py "$CDP_URL" "$site" "$CREDENTIALS_DIR"
+    done
+
+    # 关闭浏览器
+    echo ""
+    read -p "是否关闭浏览器? [Y/n] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        kill $CHROME_PID 2>/dev/null || true
+        info "浏览器已关闭"
+    fi
+
+    success "网页登录配置完成"
 }
 
-# 引导注册小红书
-setup_xiaohongshu() {
-    echo ""
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}  小红书账号登录引导${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-    echo "将启动 Chrome 浏览器，请扫码登录你的小红书账号"
-    echo "登录成功后，Cookie 将自动保存"
-    echo ""
-    read -p "按 Enter 启动浏览器..."
-
-    # 启动 Chrome
-    info "启动 Chrome 浏览器..."
-    google-chrome --remote-debugging-port=9223 --user-data-dir=/tmp/chrome-virtual-entity-xiaohongshu https://www.xiaohongshu.com &
-    CHROME_PID=$!
-
-    echo ""
-    echo "浏览器已启动，请在浏览器中完成扫码登录"
-    echo ""
-    read -p "登录完成后按 Enter 继续..."
-
-    # 保存 Cookie 的提示
-    echo ""
-    success "小红书登录完成"
-    echo ""
-    echo "请手动导出 Cookie 并保存到:"
-    echo "  $CREDENTIALS_DIR/xiaohongshu_cookies.json"
-    echo ""
-    echo "方法："
-    echo "  1. 在 Chrome 中按 F12 打开开发者工具"
-    echo "  2. 切换到 Application 标签"
-    echo "  3. 左侧选择 Cookies > https://www.xiaohongshu.com"
-    echo "  4. 复制所有 Cookie 到 JSON 文件"
-    echo ""
-
-    # 创建 Cookie 目录
-    mkdir -p "$CREDENTIALS_DIR"
-
-    # 更新配置
-    sed -i "s/XIAOHONGSHU_ENABLED=false/XIAOHONGSHU_ENABLED=true/" "$CONFIG_FILE" 2>/dev/null || true
-    success "小红书配置已启用"
-}
-
-# 引导注册社交媒体
-setup_social_media() {
+# 自动重启 OpenClaw
+restart_openclaw() {
     echo ""
     echo "=========================================="
-    echo "  社交媒体账号配置（可选）"
+    echo "  重启 OpenClaw"
     echo "=========================================="
     echo ""
-    echo "是否需要配置角色社交媒体账号登录？"
-    echo ""
 
-    SETUP_TWITTER=false
-    SETUP_XIAOHONGSHU=false
-
-    # Twitter 配置
-    read -p "是否需要配置角色推特 (Twitter/X) 登录? [y/N] " -n 1 -r
+    read -p "是否立即重启 OpenClaw? [Y/n] " -n 1 -r
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        SETUP_TWITTER=true
-    fi
 
-    # 小红书配置
-    read -p "是否需要配置角色小红书登录? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        SETUP_XIAOHONGSHU=true
-    fi
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        info "正在重启 OpenClaw..."
 
-    # 执行配置
-    if [ "$SETUP_TWITTER" = true ]; then
-        setup_twitter
-    fi
+        # 查找并停止现有的 OpenClaw 进程
+        pkill -f "openclaw" 2>/dev/null || true
+        pkill -f "claude.*openclaw" 2>/dev/null || true
+        sleep 2
 
-    if [ "$SETUP_XIAOHONGSHU" = true ]; then
-        setup_xiaohongshu
-    fi
+        # 重新启动（假设有启动脚本）
+        if [ -f "$OPENCLAW_DIR/start.sh" ]; then
+            cd "$OPENCLAW_DIR" && bash start.sh &
+        elif [ -f "$HOME/.openclaw/scripts/start.sh" ]; then
+            bash "$HOME/.openclaw/scripts/start.sh" &
+        else
+            warn "未找到 OpenClaw 启动脚本，请手动重启"
+        fi
 
-    # 如果都不需要
-    if [ "$SETUP_TWITTER" = false ] && [ "$SETUP_XIAOHONGSHU" = false ]; then
-        info "跳过社交媒体配置，稍后可手动配置"
+        success "OpenClaw 重启完成"
+    else
+        warn "请手动重启 OpenClaw 以生效"
     fi
 }
 
@@ -419,21 +402,20 @@ show_complete() {
     echo "=========================================="
     echo ""
     echo -e "${YELLOW}安装位置:${NC}"
-    echo "  Skill 目录: $SKILL_DIR"
-    echo "  配置文件: $CONFIG_FILE"
-    echo "  Cookie 目录: $CREDENTIALS_DIR"
+    echo "  Skill: $SKILL_DIR"
+    echo "  配置: $CONFIG_FILE"
+    echo "  Cookie: $CREDENTIALS_DIR"
     echo ""
-    echo -e "${YELLOW}三种图片生成方式:${NC}"
-    echo ""
-    echo "  1. 即梦 API (推荐)"
-    echo "     获取: https://console.volcengine.com/ark"
-    echo ""
-    echo "  2. Grok API (Clawra 兼容)"
-    echo "     获取: https://fal.ai/dashboard/keys"
-    echo ""
-    echo "  3. 即梦网页版 (免费)"
-    echo "     启动: google-chrome --remote-debugging-port=9222"
-    echo "     登录: https://jimeng.jianying.com/"
+
+    if [ "$USE_JIMENG_API" = true ] || [ "$USE_GROK_API" = true ]; then
+        echo -e "${YELLOW}API 模式已启用${NC}"
+    else
+        echo -e "${YELLOW}网页版模式已启用${NC}"
+    fi
+
+    if [ "$USE_TWITTER" = true ] || [ "$USE_XIAOHONGSHU" = true ]; then
+        echo -e "${YELLOW}社交媒体已配置${NC}"
+    fi
     echo ""
 }
 
@@ -453,9 +435,9 @@ main() {
     create_config_dir
     install_dependencies
     install_skill
-    inject_persona
-    configure_api_key
-    setup_social_media
+    configure_api
+    setup_cdp_logins
+    restart_openclaw
     show_complete
 }
 
